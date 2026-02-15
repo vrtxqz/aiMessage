@@ -116,8 +116,7 @@
       align-items:center;
       justify-content:center;
     }
-    /* Nút upload avatar */
-    #upload-avatar {
+    #settings-btn {
       position: absolute;
       top: 10px;
       right: 60px;
@@ -129,13 +128,51 @@
       cursor: pointer;
       font-size: 12px;
     }
+    #settings-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      align-items:center;
+      justify-content:center;
+      z-index: 100;
+    }
+    .settings-content {
+      background: #1c1c1e;
+      padding: 20px;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+    }
+    .settings-content input, .settings-content textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #2c2c2e;
+      color: white;
+    }
+    .settings-content button {
+      padding: 10px 20px;
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="back"><</div>
     <div class="name">LiteOpt Chat</div>
-    <button id="upload-avatar">Thay avatar AI</button>
+    <button id="settings-btn">Settings</button>
   </header>
 
   <div id="chat"></div>
@@ -145,37 +182,58 @@
     <button id="send">➤</button>
   </div>
 
-  <input type="file" id="avatar-input" accept="image/*" style="display:none;">
+  <!-- Settings Panel -->
+  <div id="settings-panel">
+    <div class="settings-content">
+      <h2>AI Settings</h2>
+      <label>Tên AI:</label>
+      <input type="text" id="ai-name" placeholder="LiteOpt AI" value="LiteOpt AI"/>
+
+      <label>Tính cách AI (prompt):</label>
+      <textarea id="ai-personality" rows="4" placeholder="Bạn là một người bạn thân thiết, vui tính, hay dùng emoji..."></textarea>
+
+      <label>Avatar AI:</label>
+      <input type="file" id="avatar-input" accept="image/*"/>
+
+      <button id="save-settings">Lưu</button>
+      <button id="close-settings">Đóng</button>
+    </div>
+  </div>
 
   <script>
     const chat = document.getElementById('chat');
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send');
-    const uploadBtn = document.getElementById('upload-avatar');
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsPanel = document.getElementById('settings-panel');
+    const closeSettings = document.getElementById('close-settings');
+    const saveSettings = document.getElementById('save-settings');
+    const aiNameInput = document.getElementById('ai-name');
+    const aiPersonalityInput = document.getElementById('ai-personality');
     const avatarInput = document.getElementById('avatar-input');
 
     // API config (thay bằng của bạn)
-const API_KEY = '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'; // key OpenRouter thật
-const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'openai/gpt-4o-mini'; // thay tên model đúng
+    const API_KEY = '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'; // DÁN KEY THẬT VÀO ĐÂY
+    const API_URL = 'https://api.openrouter.ai/api/v1/chat/completions';
+    const MODEL = 'openai/gpt-oss-safeguard-20b';
 
-    // Tên và tính cách AI (prompt cố định, bạn có thể chỉnh)
-    const AI_NAME = "LiteOpt AI";
-    const AI_PERSONALITY = "Bạn là một người bạn thân thiết, vui tính, hay dùng emoji, nói chuyện tự nhiên như bro, luôn hỗ trợ và hiểu tâm trạng của người dùng. Trả lời bằng tiếng Anh, ngắn gọn, gần gũi.";
-
-    // Lưu lịch sử chat + avatar
-    let messages = JSON.parse(localStorage.getItem('chatHistory')) || [
-      { role: 'assistant', content: `Yo bro, chào mừng đến với ${AI_NAME}! Hôm nay khỏe không? 😎` }
-    ];
-
+    // Load settings từ localStorage
+    let aiName = localStorage.getItem('aiName') || 'LiteOpt AI';
+    let aiPersonality = localStorage.getItem('aiPersonality') || 'Bạn là một người bạn thân thiết, vui tính, hay dùng emoji, nói chuyện tự nhiên như bro, luôn hỗ trợ và hiểu tâm trạng của người dùng. Trả lời bằng tiếng Việt, ngắn gọn, gần gũi.';
     let aiAvatar = localStorage.getItem('aiAvatar') || 'https://via.placeholder.com/32/1c1c1e/fff?text=AI';
+
+    aiNameInput.value = aiName;
+    aiPersonalityInput.value = aiPersonality;
+
+    // Lưu lịch sử chat (memory cao, không giới hạn)
+    let messages = JSON.parse(localStorage.getItem('chatHistory')) || [
+      { role: 'assistant', content: `Yo bro, chào mừng đến với ${aiName}! Hôm nay khỏe không? 😎` }
+    ];
 
     // Hiển thị lịch sử cũ
     function loadHistory() {
       chat.innerHTML = '';
-      messages.forEach(msg => {
-        addMessage(msg.role, msg.content, true);
-      });
+      messages.forEach(msg => addMessage(msg.role, msg.content, true));
       chat.scrollTop = chat.scrollHeight;
     }
 
@@ -183,12 +241,12 @@ const MODEL = 'openai/gpt-4o-mini'; // thay tên model đúng
       const container = document.createElement('div');
       container.className = `msg-container ${role === 'user' ? 'user' : 'ai'}`;
 
-      const avatar = document.createElement('div');
-      avatar.className = 'avatar';
+      const avatarDiv = document.createElement('div');
+      avatarDiv.className = 'avatar';
       const img = document.createElement('img');
       img.src = role === 'user' ? 'https://via.placeholder.com/32/007aff/fff?text=You' : aiAvatar;
-      img.alt = role === 'user' ? 'You' : AI_NAME;
-      avatar.appendChild(img);
+      img.alt = role === 'user' ? 'You' : aiName;
+      avatarDiv.appendChild(img);
 
       const bubble = document.createElement('div');
       bubble.className = 'msg';
@@ -198,7 +256,7 @@ const MODEL = 'openai/gpt-4o-mini'; // thay tên model đúng
       time.className = 'time';
       time.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-      container.appendChild(avatar);
+      container.appendChild(avatarDiv);
       container.appendChild(bubble);
       container.appendChild(time);
 
@@ -216,7 +274,6 @@ const MODEL = 'openai/gpt-4o-mini'; // thay tên model đúng
       messages.push({ role: 'user', content: text });
       input.value = '';
 
-      // Typing indicator
       const typingContainer = document.createElement('div');
       typingContainer.className = 'msg-container ai';
       const typingAvatar = document.createElement('div');
@@ -244,7 +301,7 @@ const MODEL = 'openai/gpt-4o-mini'; // thay tên model đúng
           body: JSON.stringify({
             model: MODEL,
             messages: [
-              { role: 'system', content: `Tên bạn là ${AI_NAME}. Tính cách: ${AI_PERSONALITY}` },
+              { role: 'system', content: `Tên bạn là ${aiName}. Tính cách: ${aiPersonality}` },
               ...messages
             ],
             temperature: 0.7,
@@ -276,8 +333,21 @@ const MODEL = 'openai/gpt-4o-mini'; // thay tên model đúng
       if (e.key === 'Enter') sendMsg();
     });
 
-    // Upload avatar cho AI
-    uploadAvatar.addEventListener('click', () => avatarInput.click());
+    // Settings panel
+    settingsBtn.onclick = () => settingsPanel.style.display = 'flex';
+    closeSettings.onclick = () => settingsPanel.style.display = 'none';
+
+    saveSettings.onclick = () => {
+      aiName = aiNameInput.value.trim() || 'LiteOpt AI';
+      aiPersonality = aiPersonalityInput.value.trim() || 'Bạn là một người bạn thân thiết, vui tính, hay dùng emoji...';
+      localStorage.setItem('aiName', aiName);
+      localStorage.setItem('aiPersonality', aiPersonality);
+      settingsPanel.style.display = 'none';
+      loadHistory(); // reload để cập nhật tên nếu cần
+    };
+
+    // Upload avatar
+    uploadAvatar.onclick = () => avatarInput.click();
     avatarInput.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
@@ -286,8 +356,7 @@ const MODEL = 'openai/gpt-4o-mini'; // thay tên model đúng
       reader.onload = event => {
         aiAvatar = event.target.result;
         localStorage.setItem('aiAvatar', aiAvatar);
-        // Reload chat để cập nhật avatar mới
-        loadHistory();
+        loadHistory(); // reload để cập nhật avatar mới
       };
       reader.readAsDataURL(file);
     });
