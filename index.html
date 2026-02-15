@@ -116,7 +116,7 @@
     // Dán API key Groq thật của bạn vào đây
     const API_KEY = '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'; // THAY BẰNG KEY THẬT
     const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-    const MODEL = 'llama3-70b-8192';
+    const MODEL = 'openai/gpt-oss-safeguard-20b';
 
     // Lưu lịch sử chat (memory cao, không giới hạn)
     let messages = JSON.parse(localStorage.getItem('chatHistory')) || [
