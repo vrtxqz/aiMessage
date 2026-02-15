@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LiteOpt Chat - iMessage Style</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background:#000;
+      color:#fff;
+      height:100vh;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+    header {
+      background:#1c1c1e;
+      padding:12px 16px;
+      display:flex;
+      align-items:center;
+      border-bottom:1px solid #333;
+    }
+    .back { color:#007aff; font-size:18px; margin-right:12px; cursor:pointer; }
+    .name { flex:1; text-align:center; font-weight:600; font-size:18px; }
+    #chat {
+      flex:1;
+      overflow-y:auto;
+      padding:16px;
+      background:#000;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .msg {
+      max-width:75%;
+      padding:12px 16px;
+      border-radius:20px;
+      font-size:16px;
+      line-height:1.4;
+      position:relative;
+    }
+    .user {
+      background:#007aff;
+      color:#fff;
+      align-self:flex-end;
+      border-bottom-right-radius:4px;
+    }
+    .ai {
+      background:#1c1c1e;
+      color:#fff;
+      align-self:flex-start;
+      border-bottom-left-radius:4px;
+    }
+    .typing {
+      align-self:flex-start;
+      background:#1c1c1e;
+      padding:12px 16px;
+      border-radius:20px;
+      font-size:14px;
+      color:#888;
+      width:fit-content;
+    }
+    #input-area {
+      background:#1c1c1e;
+      padding:12px 16px;
+      display:flex;
+      align-items:center;
+      border-top:1px solid #333;
+    }
+    #input {
+      flex:1;
+      background:#2c2c2e;
+      border:none;
+      border-radius:20px;
+      padding:12px 20px;
+      color:#fff;
+      font-size:16px;
+      outline:none;
+    }
+    #send {
+      background:#007aff;
+      color:#fff;
+      border:none;
+      border-radius:50%;
+      width:40px;
+      height:40px;
+      margin-left:12px;
+      font-size:18px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="back"><</div>
+    <div class="name">LiteOpt Chat</div>
+  </header>
+
+  <div id="chat"></div>
+
+  <div id="input-area">
+    <input id="input" type="text" placeholder="iMessage..." autocomplete="off"/>
+    <button id="send">➤</button>
+  </div>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+
+    // API key Groq (thay bằng key thật của bạn)
+    const API_KEY = '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'; // Paste key từ https://console.groq.com/keys
+    const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+    const MODEL = 'llama3-70b-8192';
+
+    // Lưu lịch sử chat vào localStorage
+    let messages = JSON.parse(localStorage.getItem('chatHistory')) || [
+      { role: 'assistant', content: 'Yo bro, chào mừng đến với LiteOpt Chat! Hôm nay khỏe không? 😎' }
+    ];
+
+    // Hiển thị lịch sử cũ khi load trang
+    function loadHistory() {
+      chat.innerHTML = '';
+      messages.forEach(msg => {
+        const div = document.createElement('div');
+        div.className = `msg ${msg.role === 'user' ? 'user' : 'ai'}`;
+        div.textContent = msg.content;
+        chat.appendChild(div);
+      });
+      chat.scrollTop = chat.scrollHeight;
+    }
+    loadHistory();
+
+    async function sendMsg() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      // Thêm tin nhắn của bạn
+      messages.push({ role: 'user', content: text });
+      const userMsg = document.createElement('div');
+      userMsg.className = 'msg user';
+      userMsg.textContent = text;
+      chat.appendChild(userMsg);
+      input.value = '';
+      chat.scrollTop = chat.scrollHeight;
+
+      // Hiển thị "đang soạn..."
+      const typing = document.createElement('div');
+      typing.className = 'msg ai typing';
+      typing.textContent = 'Đang soạn...';
+      chat.appendChild(typing);
+      chat.scrollTop = chat.scrollHeight;
+
+      // Gửi toàn bộ lịch sử cho API
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: MODEL,
+            messages: messages,
+            temperature: 0.7
+          })
+        });
+
+        const data = await res.json();
+        const reply = data.choices[0].message.content;
+
+        typing.remove();
+        messages.push({ role: 'assistant', content: reply });
+
+        const aiMsg = document.createElement('div');
+        aiMsg.className = 'msg ai';
+        aiMsg.textContent = reply;
+        chat.appendChild(aiMsg);
+        chat.scrollTop = chat.scrollHeight;
+
+        // Lưu lịch sử vào localStorage (không giới hạn độ dài)
+        localStorage.setItem('chatHistory', JSON.stringify(messages));
+      } catch (err) {
+        typing.textContent = 'Lỗi rồi bro: ' + err.message;
+      }
+    }
+
+    sendBtn.onclick = sendMsg;
+    input.addEventListener('keypress', e => {
+      if (e.key === 'Enter') sendMsg();
+    });
+
+    // Nút xóa lịch sử (nếu bạn muốn reset)
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = 'Xóa lịch sử';
+    resetBtn.style.position = 'absolute';
+    resetBtn.style.top = '10px';
+    resetBtn.style.right = '10px';
+    resetBtn.style.padding = '8px 16px';
+    resetBtn.style.background = '#ff3b30';
+    resetBtn.style.color = '#fff';
+    resetBtn.style.border = 'none';
+    resetBtn.style.borderRadius = '8px';
+    resetBtn.style.cursor = 'pointer';
+    document.body.appendChild(resetBtn);
+    resetBtn.onclick = () => {
+      localStorage.removeItem('chatHistory');
+      messages = [{ role: 'assistant', content: 'Lịch sử đã xóa. Chào bro!' }];
+      loadHistory();
+    };
+  </script>
+</body>
+</html>
