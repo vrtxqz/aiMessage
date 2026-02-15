@@ -17,12 +17,13 @@
     }
     header {
       background:#1c1c1e;
-      padding:12px 16px;
+      padding:10px 16px;
       display:flex;
       align-items:center;
       border-bottom:1px solid #333;
+      position:relative;
     }
-    .back { color:#007aff; font-size:18px; margin-right:12px; cursor:pointer; }
+    .back { color:#007aff; font-size:20px; margin-right:12px; cursor:pointer; }
     .name { flex:1; text-align:center; font-weight:600; font-size:18px; }
     #chat {
       flex:1;
@@ -31,40 +32,62 @@
       background:#000;
       display:flex;
       flex-direction:column;
-      gap:12px;
+      gap:8px;
+    }
+    .msg-container {
+      display:flex;
+      align-items:flex-end;
+      max-width:80%;
+      margin-bottom:4px;
+    }
+    .msg-container.user { flex-direction:row-reverse; align-self:flex-end; }
+    .msg-container.ai { align-self:flex-start; }
+    .avatar {
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      margin:0 8px;
+      background:#333;
+      flex-shrink:0;
+      object-fit:cover;
     }
     .msg {
-      max-width:75%;
-      padding:12px 16px;
-      border-radius:20px;
-      font-size:16px;
-      line-height:1.4;
+      padding:10px 14px;
+      border-radius:18px;
+      font-size:15px;
+      line-height:1.3;
       position:relative;
+      word-wrap:break-word;
     }
-    .user {
+    .user .msg {
       background:#007aff;
       color:#fff;
-      align-self:flex-end;
       border-bottom-right-radius:4px;
     }
-    .ai {
+    .ai .msg {
       background:#1c1c1e;
       color:#fff;
-      align-self:flex-start;
       border-bottom-left-radius:4px;
+    }
+    .time {
+      font-size:11px;
+      color:#888;
+      margin-top:4px;
+      text-align:right;
+      align-self:flex-end;
     }
     .typing {
       align-self:flex-start;
+      padding:10px 14px;
       background:#1c1c1e;
-      padding:12px 16px;
-      border-radius:20px;
+      border-radius:18px;
+      width:fit-content;
       font-size:14px;
       color:#888;
-      width:fit-content;
     }
     #input-area {
       background:#1c1c1e;
-      padding:12px 16px;
+      padding:10px 16px;
       display:flex;
       align-items:center;
       border-top:1px solid #333;
@@ -74,7 +97,7 @@
       background:#2c2c2e;
       border:none;
       border-radius:20px;
-      padding:12px 20px;
+      padding:12px 16px;
       color:#fff;
       font-size:16px;
       outline:none;
@@ -84,8 +107,8 @@
       color:#fff;
       border:none;
       border-radius:50%;
-      width:40px;
-      height:40px;
+      width:38px;
+      height:38px;
       margin-left:12px;
       font-size:18px;
       cursor:pointer;
@@ -93,12 +116,26 @@
       align-items:center;
       justify-content:center;
     }
+    /* Nút upload avatar */
+    #upload-avatar {
+      position: absolute;
+      top: 10px;
+      right: 60px;
+      padding: 8px 12px;
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="back"><</div>
     <div class="name">LiteOpt Chat</div>
+    <button id="upload-avatar">Thay avatar AI</button>
   </header>
 
   <div id="chat"></div>
@@ -108,52 +145,91 @@
     <button id="send">➤</button>
   </div>
 
+  <input type="file" id="avatar-input" accept="image/*" style="display:none;">
+
   <script>
     const chat = document.getElementById('chat');
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send');
+    const uploadBtn = document.getElementById('upload-avatar');
+    const avatarInput = document.getElementById('avatar-input');
 
-    // Dán API key Groq thật của bạn vào đây
-    const API_KEY = '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'; // THAY BẰNG KEY THẬT
-    const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+    // API config (thay bằng của bạn)
+    const API_KEY = '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'; // DÁN KEY THẬT VÀO ĐÂY
+    const API_URL = 'https://api.openrouter.ai/api/v1/chat/completions';
     const MODEL = 'openai/gpt-oss-safeguard-20b';
 
-    // Lưu lịch sử chat (memory cao, không giới hạn)
+    // Tên và tính cách AI (prompt cố định, bạn có thể chỉnh)
+    const AI_NAME = "LiteOpt AI";
+    const AI_PERSONALITY = "Bạn là một người bạn thân thiết, vui tính, hay dùng emoji, nói chuyện tự nhiên như bro, luôn hỗ trợ và hiểu tâm trạng của người dùng. Trả lời bằng tiếng Anh, ngắn gọn, gần gũi.";
+
+    // Lưu lịch sử chat + avatar
     let messages = JSON.parse(localStorage.getItem('chatHistory')) || [
-      { role: 'assistant', content: 'Yo bro, chào mừng đến với LiteOpt Chat! Hôm nay khỏe không? 😎' }
+      { role: 'assistant', content: `Yo bro, chào mừng đến với ${AI_NAME}! Hôm nay khỏe không? 😎` }
     ];
 
-    // Hiển thị lịch sử cũ khi mở trang
+    let aiAvatar = localStorage.getItem('aiAvatar') || 'https://via.placeholder.com/32/1c1c1e/fff?text=AI';
+
+    // Hiển thị lịch sử cũ
     function loadHistory() {
       chat.innerHTML = '';
       messages.forEach(msg => {
-        const div = document.createElement('div');
-        div.className = `msg ${msg.role === 'user' ? 'user' : 'ai'}`;
-        div.textContent = msg.content;
-        chat.appendChild(div);
+        addMessage(msg.role, msg.content, true);
       });
       chat.scrollTop = chat.scrollHeight;
     }
+
+    function addMessage(role, content, isHistory = false) {
+      const container = document.createElement('div');
+      container.className = `msg-container ${role === 'user' ? 'user' : 'ai'}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      const img = document.createElement('img');
+      img.src = role === 'user' ? 'https://via.placeholder.com/32/007aff/fff?text=You' : aiAvatar;
+      img.alt = role === 'user' ? 'You' : AI_NAME;
+      avatar.appendChild(img);
+
+      const bubble = document.createElement('div');
+      bubble.className = 'msg';
+      bubble.textContent = content;
+
+      const time = document.createElement('div');
+      time.className = 'time';
+      time.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+      container.appendChild(avatar);
+      container.appendChild(bubble);
+      container.appendChild(time);
+
+      chat.appendChild(container);
+      if (!isHistory) chat.scrollTop = chat.scrollHeight;
+    }
+
     loadHistory();
 
     async function sendMsg() {
       const text = input.value.trim();
       if (!text) return;
 
-      // Thêm tin nhắn bạn
+      addMessage('user', text);
       messages.push({ role: 'user', content: text });
-      const userMsg = document.createElement('div');
-      userMsg.className = 'msg user';
-      userMsg.textContent = text;
-      chat.appendChild(userMsg);
       input.value = '';
-      chat.scrollTop = chat.scrollHeight;
 
-      // "Đang soạn..."
-      const typing = document.createElement('div');
-      typing.className = 'msg ai typing';
-      typing.textContent = 'Đang soạn...';
-      chat.appendChild(typing);
+      // Typing indicator
+      const typingContainer = document.createElement('div');
+      typingContainer.className = 'msg-container ai';
+      const typingAvatar = document.createElement('div');
+      typingAvatar.className = 'avatar';
+      const typingImg = document.createElement('img');
+      typingImg.src = aiAvatar;
+      typingAvatar.appendChild(typingImg);
+      const typingBubble = document.createElement('div');
+      typingBubble.className = 'msg typing';
+      typingBubble.innerHTML = 'Đang soạn <span class="typing-dots">...</span>';
+      typingContainer.appendChild(typingAvatar);
+      typingContainer.appendChild(typingBubble);
+      chat.appendChild(typingContainer);
       chat.scrollTop = chat.scrollHeight;
 
       try {
@@ -161,37 +237,36 @@
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${API_KEY}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'HTTP-Referer': window.location.href,
+            'X-Title': 'LiteOpt Chat'
           },
           body: JSON.stringify({
             model: MODEL,
-            messages: messages,
-            temperature: 0.7
+            messages: [
+              { role: 'system', content: `Tên bạn là ${AI_NAME}. Tính cách: ${AI_PERSONALITY}` },
+              ...messages
+            ],
+            temperature: 0.7,
+            max_tokens: 1024
           })
         });
 
+        if (!res.ok) throw new Error('API error: ' + res.status);
+
         const data = await res.json();
+        if (!data.choices || !data.choices[0]) throw new Error('No response from API');
 
-        // Kiểm tra lỗi API
-        if (!res.ok || !data.choices || !data.choices[0]) {
-          throw new Error(data.error?.message || 'API lỗi, kiểm tra key');
-        }
+        const reply = data.choices[0].message.content.trim();
 
-        const reply = data.choices[0].message.content;
-
-        typing.remove();
+        typingContainer.remove();
+        addMessage('assistant', reply);
         messages.push({ role: 'assistant', content: reply });
 
-        const aiMsg = document.createElement('div');
-        aiMsg.className = 'msg ai';
-        aiMsg.textContent = reply;
-        chat.appendChild(aiMsg);
-        chat.scrollTop = chat.scrollHeight;
-
-        // Lưu lịch sử (không giới hạn độ dài)
         localStorage.setItem('chatHistory', JSON.stringify(messages));
       } catch (err) {
-        typing.textContent = 'Lỗi rồi bro: ' + err.message;
+        typingContainer.remove();
+        addMessage('assistant', 'Lỗi rồi bro: ' + err.message);
         console.error(err);
       }
     }
@@ -201,7 +276,23 @@
       if (e.key === 'Enter') sendMsg();
     });
 
-    // Nút xóa lịch sử (nếu muốn reset)
+    // Upload avatar cho AI
+    uploadAvatar.addEventListener('click', () => avatarInput.click());
+    avatarInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = event => {
+        aiAvatar = event.target.result;
+        localStorage.setItem('aiAvatar', aiAvatar);
+        // Reload chat để cập nhật avatar mới
+        loadHistory();
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Nút xóa lịch sử
     const resetBtn = document.createElement('button');
     resetBtn.textContent = 'Xóa lịch sử';
     resetBtn.style.position = 'absolute';
@@ -216,6 +307,8 @@
     document.body.appendChild(resetBtn);
     resetBtn.onclick = () => {
       localStorage.removeItem('chatHistory');
+      localStorage.removeItem('aiAvatar');
+      aiAvatar = 'https://via.placeholder.com/32/1c1c1e/fff?text=AI';
       messages = [{ role: 'assistant', content: 'Lịch sử đã xóa. Chào bro!' }];
       loadHistory();
     };
