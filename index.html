@@ -113,17 +113,17 @@
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send');
 
-    // API key Groq (thay bằng key thật của bạn)
-    const API_KEY = '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'; // Paste key từ https://console.groq.com/keys
+    // Dán API key Groq thật của bạn vào đây
+    const API_KEY = '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'; // THAY BẰNG KEY THẬT
     const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
     const MODEL = 'llama3-70b-8192';
 
-    // Lưu lịch sử chat vào localStorage
+    // Lưu lịch sử chat (memory cao, không giới hạn)
     let messages = JSON.parse(localStorage.getItem('chatHistory')) || [
       { role: 'assistant', content: 'Yo bro, chào mừng đến với LiteOpt Chat! Hôm nay khỏe không? 😎' }
     ];
 
-    // Hiển thị lịch sử cũ khi load trang
+    // Hiển thị lịch sử cũ khi mở trang
     function loadHistory() {
       chat.innerHTML = '';
       messages.forEach(msg => {
@@ -140,7 +140,7 @@
       const text = input.value.trim();
       if (!text) return;
 
-      // Thêm tin nhắn của bạn
+      // Thêm tin nhắn bạn
       messages.push({ role: 'user', content: text });
       const userMsg = document.createElement('div');
       userMsg.className = 'msg user';
@@ -149,14 +149,13 @@
       input.value = '';
       chat.scrollTop = chat.scrollHeight;
 
-      // Hiển thị "đang soạn..."
+      // "Đang soạn..."
       const typing = document.createElement('div');
       typing.className = 'msg ai typing';
       typing.textContent = 'Đang soạn...';
       chat.appendChild(typing);
       chat.scrollTop = chat.scrollHeight;
 
-      // Gửi toàn bộ lịch sử cho API
       try {
         const res = await fetch(API_URL, {
           method: 'POST',
@@ -172,6 +171,12 @@
         });
 
         const data = await res.json();
+
+        // Kiểm tra lỗi API
+        if (!res.ok || !data.choices || !data.choices[0]) {
+          throw new Error(data.error?.message || 'API lỗi, kiểm tra key');
+        }
+
         const reply = data.choices[0].message.content;
 
         typing.remove();
@@ -183,10 +188,11 @@
         chat.appendChild(aiMsg);
         chat.scrollTop = chat.scrollHeight;
 
-        // Lưu lịch sử vào localStorage (không giới hạn độ dài)
+        // Lưu lịch sử (không giới hạn độ dài)
         localStorage.setItem('chatHistory', JSON.stringify(messages));
       } catch (err) {
         typing.textContent = 'Lỗi rồi bro: ' + err.message;
+        console.error(err);
       }
     }
 
@@ -195,7 +201,7 @@
       if (e.key === 'Enter') sendMsg();
     });
 
-    // Nút xóa lịch sử (nếu bạn muốn reset)
+    // Nút xóa lịch sử (nếu muốn reset)
     const resetBtn = document.createElement('button');
     resetBtn.textContent = 'Xóa lịch sử';
     resetBtn.style.position = 'absolute';
